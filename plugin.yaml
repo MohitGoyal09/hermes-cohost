@@ -1,0 +1,32 @@
+name: cohost
+version: "0.1.0"
+description: >-
+  Hermes co-hosts your Twitch stream: answers viewers about what is on screen (OBS or screen
+  capture), flags bad messages to you, marks highlights when chat spikes and saves OBS replay
+  clips, then writes a recap with VOD chapters. Viewers only get read-only answers.
+author: Mohit Goyal
+manifest_version: 2
+api_version: 1
+license: MIT
+homepage: https://github.com/MohitGoyal09/hermes-cohost
+tags: [twitch, streaming, obs, live, chat]
+requires_hermes: ">=0.23.0"
+provides_tools:
+  - cohost_status
+  - cohost_mark
+  - cohost_say
+provides_hooks: []
+config_schema:
+  channel: {type: str, default: "", label: "Twitch channel", description: "Channel to co-host when /cohost start has no argument"}
+  bot_username: {type: str, default: "", label: "Bot username", description: "Twitch login of the bot account (needed to reply)"}
+  twitch_token: {type: secret, env: COHOST_TWITCH_TOKEN, label: "Bot chat token", description: "OAuth token with chat:read and chat:edit for the bot account. Without it the co-host is read-only."}
+  names: {type: list, default: ["hermes"], label: "Names viewers can use", description: "Viewers address the co-host with @name or 'name,'"}
+  persona: {type: str, default: "", label: "Persona", description: "One or two sentences on tone, e.g. 'Dry humour, loves Rust.'"}
+  stream_title: {type: str, default: "", label: "Stream title", description: "Context for answers and the recap"}
+  obs_host: {type: str, default: "127.0.0.1", label: "OBS WebSocket host"}
+  obs_port: {type: int, default: 4455, label: "OBS WebSocket port"}
+  obs_password: {type: secret, env: COHOST_OBS_PASSWORD, label: "OBS WebSocket password"}
+  screen_fallback: {type: bool, default: true, label: "Use screen capture when OBS is not reachable"}
+  frame_interval: {type: float, default: 5.0, label: "Seconds between frames"}
+  answers_per_minute: {type: int, default: 6, label: "Max answers per minute"}
+  blocked_terms: {type: list, default: [], label: "Blocked terms", description: "Messages with these words are flagged as high severity"}

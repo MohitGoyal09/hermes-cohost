@@ -133,13 +133,13 @@ class CohostSession:
         if msg.user == self.settings.bot_nick.lower():
             return
         t = self.stream_time()
-        self._recent_chat.append(f"{msg.display}: {msg.text}")
         flag = self._moderator.check(msg)
-        if flag is not None:
+        if flag is not None:  # flagged text never reaches the model's context
             self._record({"type": "flag", "t": t, "user": msg.user, "text": msg.text,
                           "reason": flag.reason, "severity": flag.severity})
             self._safe_notify(f"🚩 Flag ({flag.severity}) {fmt_ts(t)} {msg.display}: {msg.text[:120]} — {flag.reason}")
             return
+        self._recent_chat.append(f"{msg.display}: {msg.text}")
         hype = self._hype.feed(msg.text, t, is_mod=msg.is_mod)
         if hype is not None:
             self._highlight(hype.reason, t)
@@ -160,7 +160,8 @@ class CohostSession:
                                        name=self.settings.bot_nick or "Hermes")
             parsed = self._llm.complete_structured(**req).parsed or {}
             reply = clean_reply(str(parsed.get("reply", "")))
-            if parsed.get("answerable") and reply and self.chat.say(reply, reply_to=msg.id or None):
+            safe = bool(reply) and self._moderator.blocked_term(reply) is None
+            if parsed.get("answerable") and safe and self.chat.say(reply, reply_to=msg.id or None):
                 self._record({"type": "answer", "t": t, "user": msg.user, "text": msg.text, "reply": reply})
             else:
                 self._record({"type": "chat", "t": t, "user": msg.user, "text": msg.text})

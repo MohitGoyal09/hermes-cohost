@@ -26,13 +26,17 @@ class Moderator:
         self.caps_ratio, self.caps_min_letters = caps_ratio, caps_min_letters
         self._recent: deque[tuple[str, str, float]] = deque(maxlen=500)
 
+    def blocked_term(self, text: str) -> str | None:
+        lowered = text.lower()
+        return next((t for t in self.blocked if re.search(rf"\b{re.escape(t)}\b", lowered)), None)
+
     def check(self, msg: ChatMessage) -> Flag | None:
         if msg.is_mod:
             return None
         text = msg.text.lower()
-        for term in self.blocked:
-            if re.search(rf"\b{re.escape(term)}\b", text):
-                return Flag(f"blocked term '{term}'", "high")
+        term = self.blocked_term(text)
+        if term:
+            return Flag(f"blocked term '{term}'", "high")
         if LINK_RE.search(msg.text) and not msg.is_sub:
             return Flag("link from a first-time chatter" if msg.first_msg else "link from a non-subscriber",
                         "high" if msg.first_msg else "medium")

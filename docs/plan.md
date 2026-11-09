@@ -28,17 +28,17 @@ ObsClient / grab_screen ──frame──► Brain (is_addressed → ctx.llm →
 ## Files
 | File | Owner | Purpose |
 |---|---|---|
-| `cohost/twitch.py` | agent A | IRC parser + client (anonymous read, token send, rate limit, reconnect) |
-| `cohost/obs.py` | agent A | OBS WebSocket v5 client: auth, program screenshot, timecode, replay save |
-| `cohost/screen.py` | agent A | fallback screen grab via Pillow `ImageGrab` |
-| `cohost/highlights.py` | agent B | chat-rate spike + keyword hype detector |
-| `cohost/moderation.py` | agent B | local rules: blocked terms, caps, repeats, links |
-| `cohost/brain.py` | agent B | addressed-detection, answer request builder, reply sanitiser, limiter |
-| `cohost/recap.py` | agent B | recap request builder + markdown renderer |
-| `cohost/session.py`, `__init__.py`, `plugin.yaml`, `README.md` | orchestrator | wiring, commands, tools, state |
+| `cohost/twitch.py` | | IRC parser + client (anonymous read, token send, rate limit, reconnect) |
+| `cohost/obs.py` | | OBS WebSocket v5 client: auth, program screenshot, timecode, replay save |
+| `cohost/screen.py` | | fallback screen grab via Pillow `ImageGrab` |
+| `cohost/highlights.py` | | chat-rate spike + keyword hype detector |
+| `cohost/moderation.py` | | local rules: blocked terms, caps, repeats, links |
+| `cohost/brain.py` | | addressed-detection, answer request builder, reply sanitiser, limiter |
+| `cohost/recap.py` | | recap request builder + markdown renderer |
+| `cohost/session.py`, `__init__.py`, `plugin.yaml`, `README.md` | | wiring, commands, tools, state |
 
 ## Dependencies
 None new. `websockets` and `Pillow` are Hermes core dependencies; Twitch IRC is stdlib.
 
 ## Tests
-`uv run --with pytest --with websockets==15.0.1 --with Pillow python -m pytest -q`
+`uv run --with pytest --with websockets==15.0.1 --with Pillow python -m pytest -q tests`
