@@ -46,6 +46,10 @@ def test_clean_reply_blocks_commands_links_and_length():
     long = clean_reply("word " * 200, max_len=50)
     assert len(long) <= 50 and long.endswith("…")
     assert clean_reply("   ") == ""
+    assert clean_reply("/ /ban x") == "ban x"
+    assert clean_reply(". !/timeout y") == "timeout y"
+    assert clean_reply("go to spam.biz/free or Free-Stuff.co.uk") == "go to [link removed] or [link removed]"
+    assert clean_reply("version 1.5 is out") == "version 1.5 is out"
 
 
 def test_reply_limiter():

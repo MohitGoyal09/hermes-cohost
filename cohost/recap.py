@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
+from .brain import URL_RE
+
 MAX_CHAT_LINES = 600
+MAX_TITLE = 80
 MIN_CHAPTER_GAP = 10.0  # YouTube needs chapters at least 10 s apart, the first at 00:00
 
 RECAP_SCHEMA = {
@@ -31,10 +35,27 @@ def fmt_ts(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 
+def safe_text(text: Any, max_len: int | None = None) -> str:
+    """Model output shaped by chat goes into a VOD description: one line, no links, no markdown lead."""
+    text = URL_RE.sub("[link removed]", " ".join(str(text).split()))
+    text = re.sub(r"^[#>*\-\s]+", "", text)
+    if max_len and len(text) > max_len:
+        text = text[: max_len - 1].rstrip() + "…"
+    return text
+
+
+def _seconds(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def fix_chapters(chapters: list[dict[str, Any]], duration: float) -> list[dict[str, Any]]:
+    valid = [(t, c) for c in chapters if isinstance(c, dict) and (t := _seconds(c.get("t"))) is not None]
     out: list[dict[str, Any]] = []
-    for ch in sorted(chapters, key=lambda c: float(c.get("t", 0))):
-        t, title = float(ch.get("t", 0)), str(ch.get("title", "")).strip()
+    for t, ch in sorted(valid, key=lambda pair: pair[0]):
+        title = safe_text(ch.get("title", ""), MAX_TITLE)
         if not title or t >= duration:
             continue
         if not out:
@@ -54,7 +75,7 @@ def _moment_line(ev: dict[str, Any]) -> str:
 def build_recap_request(events: list[dict[str, Any]], title: str, duration: float) -> dict[str, Any]:
     chat = [e for e in events if e["type"] in ("chat", "answer")]
     step = max(1, len(chat) // MAX_CHAT_LINES)  # even sample keeps the whole stream represented
-    lines = [f"{fmt_ts(e['t'])} {e.get('user', '')}: {e.get('text', '')}" for e in chat[::step]]
+    lines = [f"{fmt_ts(e['t'])} {safe_text(e.get('user', ''))}: {safe_text(e.get('text', ''))}" for e in chat[::step]]
     moments = [_moment_line(e) for e in events if e["type"] in ("highlight", "mark")]
     text = (f"Stream title: {title or 'unknown'}\nLength: {fmt_ts(duration)}\n\n"
             "Moments:\n" + ("\n".join(moments) or "(none)") +
@@ -74,8 +95,8 @@ def build_recap_request(events: list[dict[str, Any]], title: str, duration: floa
 
 def render_recap(parsed: dict[str, Any] | None, events: list[dict[str, Any]], title: str, duration: float) -> str:
     out = [f"# Stream recap: {title or 'untitled stream'}", "", f"Length: {fmt_ts(duration)}", ""]
-    if parsed and parsed.get("summary"):
-        out += [parsed["summary"].strip(), ""]
+    if parsed and safe_text(parsed.get("summary", "")):
+        out += [safe_text(parsed["summary"]), ""]
     else:
         out += ["A summary was not available; the moments below come from the live log.", ""]
     chapters = fix_chapters(parsed.get("chapters", []) if parsed else [], duration)

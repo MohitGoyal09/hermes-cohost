@@ -24,6 +24,17 @@ def test_fix_chapters_follows_youtube_rules():
     ]
 
 
+def test_chapter_titles_and_summary_are_sanitized():
+    raw = [{"t": 0, "title": "Start\n00:05 Fake chapter"}, {"t": "bad", "title": "x"},
+           {"t": 100, "title": "Go to spam.biz now " + "x" * 200}, {"t": 200, "title": "# End"}]
+    chapters = fix_chapters(raw, duration=1000)
+    assert chapters[0]["title"] == "Start 00:05 Fake chapter"
+    assert "[link removed]" in chapters[1]["title"] and len(chapters[1]["title"]) <= 80
+    assert chapters[2]["title"] == "End"
+    md = render_recap({"summary": "Great\n## Injected https://evil.io", "chapters": raw}, [], "t", 1000)
+    assert "\n## Injected" not in md and "evil.io" not in md
+
+
 def test_build_request_bounds_chat_and_lists_moments():
     many = [{"type": "chat", "t": float(i), "user": "u", "text": f"m{i}"} for i in range(5000)]
     req = build_recap_request(many + EVENTS, "Rust stream", duration=5000)

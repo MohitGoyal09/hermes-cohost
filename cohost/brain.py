@@ -7,8 +7,8 @@ from collections import deque
 from typing import Any
 
 ASK_PREFIX = "!ask"
-URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
-LEADING_COMMAND_RE = re.compile(r"^[/.!]+")
+URL_RE = re.compile(r"https?://\S+|www\.\S+|\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\b(?:/\S*)?", re.IGNORECASE)
+LEADING_COMMAND_RE = re.compile(r"^[\s/.!]+")  # Twitch and other bots act on a leading / . !
 
 ANSWER_SCHEMA = {
     "type": "object",
