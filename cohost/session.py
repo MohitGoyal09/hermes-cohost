@@ -75,8 +75,8 @@ class CohostSession:
         self._frames: threading.Thread | None = None
         self._obs: Any = None
         self._live_offset: float | None = None  # session seconds at which the broadcast started
-        self._last_flag_alert = float("-inf")
-        self._muted_flags = 0
+        self._last_flag_alert: dict[str, float] = {}  # per severity: noise never mutes a serious flag
+        self._muted_flags: dict[str, int] = {}
         self.latest_frame: bytes | None = None
         self.frame_source = "none"
         self._started_mono = 0.0
@@ -216,10 +216,11 @@ class CohostSession:
     def _flag_alert(self, msg: ChatMessage, reason: str, severity: str, t: float) -> None:
         now = time.monotonic()
         with self._lock:
-            if now - self._last_flag_alert < FLAG_ALERT_GAP:
-                self._muted_flags += 1
+            if now - self._last_flag_alert.get(severity, float("-inf")) < FLAG_ALERT_GAP:
+                self._muted_flags[severity] = self._muted_flags.get(severity, 0) + 1
                 return
-            self._last_flag_alert, muted, self._muted_flags = now, self._muted_flags, 0
+            self._last_flag_alert[severity] = now
+            muted = self._muted_flags.pop(severity, 0)
         more = f" (+{muted} more flagged)" if muted else ""
         self._safe_notify(f"🚩 Flag ({severity}) {fmt_ts(self._vod(t))} {msg.display}: {_defang(msg.text)} "
                           f"— {reason}{more}")

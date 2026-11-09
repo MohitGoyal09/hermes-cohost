@@ -216,6 +216,17 @@ def test_flag_alerts_are_defanged_and_coalesced(setup):
     assert s.status()["flags"] == 5
 
 
+def test_low_severity_flags_never_mute_high_severity_alerts(tmp_path):
+    notes = []
+    s = CohostSession(Settings(channel="c", blocked_terms=("slur",)), llm=FakeLlm(), notify=notes.append,
+                      data_dir=tmp_path, chat_factory=FakeChat, obs_factory=FakeObs, screen=lambda: None)
+    s.start()
+    s.on_message(msg("WHY IS THIS SO LOUD OMG", user="a"))
+    s.on_message(msg("you slur", user="b"))
+    s.stop()
+    assert [n.split(")")[0] for n in notes if "Flag" in n] == ["🚩 Flag (low", "🚩 Flag (high"]
+
+
 def test_time_switches_to_vod_clock_without_breaking_highlights(tmp_path):
     class LateLive(FakeObs):
         live = False
