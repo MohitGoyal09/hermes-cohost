@@ -33,6 +33,11 @@ class ChatMessage:
     first_msg: bool
 
 
+def _is_auth_failure(text: str) -> bool:
+    text = text.lower()
+    return any(k in text for k in ("authentication failed", "login unsuccessful", "improperly formatted auth"))
+
+
 def _unescape(value: str) -> str:
     out, i = [], 0
     while i < len(value):
@@ -97,14 +102,16 @@ class TwitchChat:
     ) -> None:
         self.channel = channel.lstrip("#").lower()
         self._on_message = on_message
-        self._token = token
-        self._nick = nick.lower() if (nick and token) else f"justinfan{random.randint(10000, 99999)}"
+        self._token = token if nick else None  # a token is useless without the bot's login name
+        self._nick = nick.lower() if self._token else f"justinfan{random.randint(10000, 99999)}"
+        self.auth_failed = False
         self._host, self._port = host, port
         self._connect = connect or self._default_connect
         self._sock: Any = None
         self._connected = False
         self._stop = threading.Event()
-        self._send_lock = threading.Lock()
+        self._send_lock = threading.Lock()  # rate-limit bookkeeping
+        self._io_lock = threading.Lock()  # one writer at a time on the TLS socket (PONG vs say)
         self._sent_at: deque[float] = deque()
         self._thread: threading.Thread | None = None
 
@@ -151,7 +158,8 @@ class TwitchChat:
 
     def _send(self, line: str) -> bool:
         try:
-            self._sock.sendall(f"{line}\r\n".encode())
+            with self._io_lock:
+                self._sock.sendall(f"{line}\r\n".encode())
             return True
         except (OSError, AttributeError) as exc:
             logger.warning("cohost: twitch send failed: %s", exc)
@@ -162,6 +170,10 @@ class TwitchChat:
         sock, self._sock = self._sock, None
         if sock is not None:
             try:
+                sock.shutdown(socket.SHUT_RDWR)  # wakes a reader blocked in recv(); close() alone does not
+            except (OSError, AttributeError):
+                pass
+            try:
                 sock.close()
             except OSError:
                 pass
@@ -170,8 +182,8 @@ class TwitchChat:
         backoff = 1.0
         while not self._stop.is_set():
             try:
-                self._session()
-                backoff = 1.0
+                if self._session():  # reached 001: the next drop is a fresh failure
+                    backoff = 1.0
             except Exception as exc:  # network errors must never kill the worker
                 logger.warning("cohost: twitch connection error: %s", exc)
             self._close()
@@ -179,7 +191,8 @@ class TwitchChat:
                 return
             backoff = min(backoff * 2, 30.0)
 
-    def _session(self) -> None:
+    def _session(self) -> bool:
+        """One connection; returns whether it got as far as the welcome (001)."""
         self._sock = self._connect()
         self._send("CAP REQ :twitch.tv/tags twitch.tv/commands")
         if self._token:
@@ -188,15 +201,22 @@ class TwitchChat:
         self._send(f"NICK {self._nick}")
         self._send(f"JOIN #{self.channel}")
         buf = b""
+        welcomed = False
         while not self._stop.is_set():
-            chunk = self._sock.recv(4096)
+            try:
+                chunk = self._sock.recv(4096)
+            except TimeoutError:  # a quiet chat is not a dead connection
+                continue
             if not chunk:
-                return
+                return welcomed
             buf += chunk
             *lines, buf = buf.split(b"\r\n")
             for raw in lines:
-                if self._handle(raw.decode("utf-8", "replace")) == "reconnect":
-                    return
+                result = self._handle(raw.decode("utf-8", "replace"))
+                welcomed = welcomed or self._connected
+                if result == "reconnect":
+                    return welcomed
+        return welcomed
 
     def _handle(self, line: str) -> str | None:
         parsed = parse_line(line)
@@ -209,8 +229,11 @@ class TwitchChat:
             self._connected = True
         elif command == "RECONNECT":
             return "reconnect"
-        elif command == "NOTICE" and params and "authentication failed" in params[-1].lower():
-            logger.error("cohost: twitch rejected the bot token")
+        elif command == "NOTICE" and params and _is_auth_failure(params[-1]):
+            logger.error("cohost: twitch rejected the bot token; continuing read-only")
+            self._token, self.auth_failed = None, True
+            self._nick = f"justinfan{random.randint(10000, 99999)}"
+            return "reconnect"
         elif command == "PRIVMSG":
             msg = to_chat_message(tags, prefix, params, time.time())
             if msg is not None:

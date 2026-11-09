@@ -103,6 +103,57 @@ def test_token_handshake_ping_and_say_with_reply():
     assert "@reply-parent-msg-id=abc-123 PRIVMSG #mohit :line1 line2" in sock.sent
 
 
+class QuietSocket(FakeSocket):
+    """Raises a read timeout before the message arrives, like a quiet chat on a socket with a timeout."""
+
+    def __init__(self, incoming):
+        super().__init__(incoming)
+        self.timeouts = 1
+
+    def recv(self, n):
+        if self.timeouts and len(self._incoming) == 1:
+            self.timeouts -= 1
+            raise TimeoutError("timed out")
+        return super().recv(n)
+
+
+def test_read_timeout_on_quiet_chat_does_not_reconnect():
+    got, connects = [], []
+    sock = QuietSocket([":tmi.twitch.tv 001 x :Welcome\r\n", PRIVMSG + "\r\n"])
+
+    def connect():
+        connects.append(1)
+        return sock
+
+    chat = TwitchChat("mohit", on_message=got.append, connect=connect)
+    _run(chat, sock, lambda: got)
+    assert got and connects == [1]
+
+
+def test_auth_failure_falls_back_to_read_only_without_hot_loop():
+    connects = []
+
+    def connect():
+        connects.append(1)
+        if len(connects) == 1:
+            return FakeSocket([":tmi.twitch.tv NOTICE * :Login authentication failed\r\n"])
+        return FakeSocket([":tmi.twitch.tv 001 justinfan1 :Welcome\r\n"])
+
+    chat = TwitchChat("c", on_message=lambda m: None, nick="bot", token="bad", connect=connect)
+    chat.start()
+    deadline = time.time() + 3
+    while time.time() < deadline and not chat.connected:
+        time.sleep(0.01)
+    chat.stop()
+    assert chat.can_send is False and chat.auth_failed is True
+    assert len(connects) == 2
+
+
+def test_token_without_nick_is_not_used():
+    chat = TwitchChat("c", on_message=lambda m: None, token="tok")
+    assert chat.can_send is False
+
+
 def test_say_rate_limit_and_length_cap():
     sock = FakeSocket([])
     chat = TwitchChat("c", on_message=lambda m: None, nick="b", token="oauth:t", connect=lambda: sock)
