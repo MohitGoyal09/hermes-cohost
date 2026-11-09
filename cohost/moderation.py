@@ -6,9 +6,10 @@ import re
 from collections import deque
 from dataclasses import dataclass
 
+from .brain import URL_RE
 from .twitch import ChatMessage
 
-LINK_RE = re.compile(r"https?://|www\.|\b[\w-]+\.(?:com|net|org|io|gg|biz|xyz|ru|ly|tv)\b", re.IGNORECASE)
+LINK_RE = URL_RE
 REPEAT_WINDOW = 30.0
 REPEAT_LIMIT = 3
 

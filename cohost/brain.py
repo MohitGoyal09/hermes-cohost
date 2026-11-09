@@ -7,7 +7,9 @@ from collections import deque
 from typing import Any
 
 ASK_PREFIX = "!ask"
-URL_RE = re.compile(r"https?://\S+|www\.\S+|\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\b(?:/\S*)?", re.IGNORECASE)
+# Bare domains only for common link TLDs, so file names like main.rs or index.js survive on coding streams.
+LINK_TLDS = "com|net|org|io|gg|biz|xyz|ru|ly|tv|co|me|app|link|info|live|shop|site|online|store|uk|in|to|cc"
+URL_RE = re.compile(rf"https?://\S+|www\.\S+|\b[\w-]+(?:\.[\w-]+)*\.(?:{LINK_TLDS})\b(?:/\S*)?", re.IGNORECASE)
 LEADING_COMMAND_RE = re.compile(r"^[\s/.!]+")  # Twitch and other bots act on a leading / . !
 
 ANSWER_SCHEMA = {

@@ -50,6 +50,8 @@ def test_clean_reply_blocks_commands_links_and_length():
     assert clean_reply(". !/timeout y") == "timeout y"
     assert clean_reply("go to spam.biz/free or Free-Stuff.co.uk") == "go to [link removed] or [link removed]"
     assert clean_reply("version 1.5 is out") == "version 1.5 is out"
+    assert clean_reply("open main.rs and index.js, then README.md") == "open main.rs and index.js, then README.md"
+    assert clean_reply("join discord.gg/abc") == "join [link removed]"
 
 
 def test_reply_limiter():

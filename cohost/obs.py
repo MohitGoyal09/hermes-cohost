@@ -45,7 +45,8 @@ class ObsClient:
         self._lock = threading.Lock()
 
     def connect(self) -> None:
-        ws = ws_connect(self._url, open_timeout=self._timeout, max_size=32 * 1024 * 1024)
+        ws = ws_connect(self._url, open_timeout=self._timeout, max_size=32 * 1024 * 1024,
+                        subprotocols=["obswebsocket.json"])
         hello = json.loads(ws.recv(timeout=self._timeout))
         if hello.get("op") != OP_HELLO:
             ws.close()
@@ -70,14 +71,15 @@ class ObsClient:
             ws.close()
 
     def request(self, request_type: str, data: dict | None = None) -> dict:
-        if self._ws is None:
-            raise ObsError("not connected")
         request_id = uuid.uuid4().hex
         payload = {"requestType": request_type, "requestId": request_id, "requestData": data or {}}
         with self._lock:
-            self._ws.send(json.dumps({"op": OP_REQUEST, "d": payload}))
+            ws = self._ws  # close() from another thread may clear it
+            if ws is None:
+                raise ObsError("not connected")
+            ws.send(json.dumps({"op": OP_REQUEST, "d": payload}))
             while True:  # skip events until our response arrives
-                msg = json.loads(self._ws.recv(timeout=self._timeout))
+                msg = json.loads(ws.recv(timeout=self._timeout))
                 if msg.get("op") == OP_RESPONSE and msg["d"].get("requestId") == request_id:
                     break
         status = msg["d"].get("requestStatus", {})
@@ -106,6 +108,6 @@ class ObsClient:
                 return False
             self.request("SaveReplayBuffer")
             return True
-        except ObsError as exc:
+        except Exception as exc:  # ObsError, timeout or closed socket: no clip, never a crash
             logger.info("cohost: replay buffer unavailable: %s", exc)
             return False
