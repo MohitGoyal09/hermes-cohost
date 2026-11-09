@@ -16,7 +16,7 @@ card updates in place while you stream.
 
 | | |
 |---|---|
-| **Sees the stream** | Reads the OBS program output through OBS WebSocket (exactly what viewers see), or falls back to a screen capture. |
+| **Sees the stream** | Reads the OBS program output through OBS WebSocket (exactly what viewers see), or, if you opt in, a full screen capture. |
 | **Answers viewers** | When someone writes `@hermes …`, `hermes, …` or `!ask …`, Hermes answers in a threaded reply using the current frame and recent chat. |
 | **Flags, never bans** | Local rules flag blocked terms, links from first-time chatters, caps spam and repeats. You get a 🚩 card with the message; nothing is deleted. |
 | **Marks highlights** | A chat spike or a "clip it" burst saves a highlight with a frame and, if the OBS replay buffer is on, a real clip file. You can also `/cohost mark`. |
@@ -64,7 +64,7 @@ ask "how's chat doing?" or "mark that" in plain words.
 
 - **Network:** connects to `irc.chat.twitch.tv:6697` (TLS) and to OBS WebSocket on the host you configure (default `127.0.0.1:4455`).
 - **Model calls:** viewer questions (text plus one stream frame) and the recap go to your active Hermes model through `ctx.llm`.
-- **Screen capture:** when OBS is not reachable and `screen_fallback` is on, it captures your screen every few seconds (macOS asks for Screen Recording permission). Turn `screen_fallback` off to prevent this.
+- **Screen capture (off by default):** if you turn on `screen_fallback`, it captures your whole screen every few seconds when OBS is not reachable (macOS asks for Screen Recording permission), and you get a warning card when it starts.
 - **Background threads:** while a session runs, threads in the gateway process read chat, poll frames and update the status card. `/cohost stop` ends them.
 - **Stored data:** chat events (`events.jsonl`), highlight frames and `recap.md` under `<HERMES_HOME>/plugin-data/cohost/sessions/`. Credentials are read only through Hermes's secret scope.
 - **No telemetry.**

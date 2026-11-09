@@ -42,7 +42,7 @@ def _settings(ctx: Any, channel: str) -> Settings:
         obs_port=int(cfg("obs_port", 4455)),
         obs_password=_secret(OBS_PASSWORD_ENV),
         frame_interval=float(cfg("frame_interval", 5.0)),
-        screen_fallback=bool(cfg("screen_fallback", True)),
+        screen_fallback=bool(cfg("screen_fallback", False)),
         blocked_terms=tuple(cfg("blocked_terms", []) or []),
         answers_per_minute=int(cfg("answers_per_minute", 6)),
     )

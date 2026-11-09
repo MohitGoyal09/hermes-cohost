@@ -38,7 +38,7 @@ class Settings:
     obs_port: int = 4455
     obs_password: str | None = None
     frame_interval: float = 5.0
-    screen_fallback: bool = True
+    screen_fallback: bool = False  # whole-desktop capture can show private windows; opt in only
     blocked_terms: tuple[str, ...] = ()
     answers_per_minute: int = 6
     per_user_cooldown: float = 30.0
@@ -207,6 +207,9 @@ class CohostSession:
             frame = self._poll_obs() if self._obs is not None else None
             if frame is None and self.settings.screen_fallback:
                 frame = self._screen()
+                if frame and self.frame_source != "screen":
+                    self._safe_notify("🖥️ OBS not reachable: using full screen capture. Viewers' answers can "
+                                      "describe anything on your screen, not only the stream.")
                 self.frame_source = "screen" if frame else "none"
             if frame is not None:
                 self.latest_frame = frame

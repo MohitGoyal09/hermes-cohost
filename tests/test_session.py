@@ -207,6 +207,29 @@ def test_agent_digest_marks_viewer_text_untrusted_and_drops_flags(setup):
     assert digest["flags"] == 1 and digest["highlights"][0]["note"] == "boss"
 
 
+def test_screen_capture_is_opt_in_and_announced(tmp_path):
+    class NoObs(FakeObs):
+        def connect(self):
+            raise OSError("OBS not running")
+
+    grabs, notes = [], []
+    screen = lambda: grabs.append(1) or b"DESKTOP"  # noqa: E731
+    off = CohostSession(Settings(channel="c", frame_interval=0.02), llm=FakeLlm(), notify=notes.append,
+                        data_dir=tmp_path, chat_factory=FakeChat, obs_factory=NoObs, screen=screen)
+    off.start()
+    time.sleep(0.1)
+    off.stop()
+    assert grabs == [] and off.latest_frame is None
+
+    on = CohostSession(Settings(channel="c", frame_interval=0.02, screen_fallback=True), llm=FakeLlm(),
+                       notify=notes.append, data_dir=tmp_path, chat_factory=FakeChat, obs_factory=NoObs,
+                       screen=screen)
+    on.start()
+    wait(lambda: on.latest_frame == b"DESKTOP")
+    on.stop()
+    assert sum("screen capture" in n for n in notes) == 1
+
+
 def test_say_without_token_reports_false(tmp_path):
     s = CohostSession(Settings(channel="c"), llm=FakeLlm(), notify=lambda t: None, data_dir=tmp_path,
                       chat_factory=FakeChat, obs_factory=FakeObs, screen=lambda: None)
