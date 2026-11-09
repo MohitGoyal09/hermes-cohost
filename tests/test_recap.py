@@ -39,7 +39,7 @@ def test_build_request_bounds_chat_and_lists_moments():
     many = [{"type": "chat", "t": float(i), "user": "u", "text": f"m{i}"} for i in range(5000)]
     req = build_recap_request(many + EVENTS, "Rust stream", duration=5000)
     text = req["input"][0]["text"]
-    assert req["purpose"] == "cohost.recap"
+    assert req["purpose"] == "cohost.recap" and req["timeout"] == 60.0
     assert text.count("\n") < 700
     assert "HIGHLIGHT 06:40 chat spike" in text and "MARK 15:00 boss fight" in text
 

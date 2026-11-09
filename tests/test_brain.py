@@ -24,7 +24,7 @@ def test_strip_address():
 def test_build_request_has_image_and_treats_chat_as_data():
     req = build_answer_request("what is this?", "viewer1", ["a: hi", "b: lol"], b"JPEG", "friendly", "Rust stream")
     assert req["json_schema"] == ANSWER_SCHEMA
-    assert req["purpose"] == "cohost.answer"
+    assert req["purpose"] == "cohost.answer" and req["timeout"] == 20.0
     kinds = [block["type"] for block in req["input"]]
     assert kinds == ["text", "image"]
     assert req["input"][1]["data"] == b"JPEG"
@@ -52,6 +52,8 @@ def test_clean_reply_blocks_commands_links_and_length():
     assert clean_reply("version 1.5 is out") == "version 1.5 is out"
     assert clean_reply("open main.rs and index.js, then README.md") == "open main.rs and index.js, then README.md"
     assert clean_reply("join discord.gg/abc") == "join [link removed]"
+    assert clean_reply("try scam.ai or evil.dev/x") == "try [link removed] or [link removed]"
+    assert clean_reply("Next.js and config.yaml, e.g. this") == "Next.js and config.yaml, e.g. this"
 
 
 def test_reply_limiter():

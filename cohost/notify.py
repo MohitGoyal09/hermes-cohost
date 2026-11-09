@@ -14,12 +14,13 @@ import threading
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
+MAX_QUEUED = 50  # alerts beyond this are dropped rather than delaying the card for minutes
 
 
 class Notifier:
     def __init__(self, post: Callable[[str], Any], status: Callable[[], str], interval: float = 20.0) -> None:
         self._post, self._status, self._interval = post, status, interval
-        self._queue: queue.Queue[str | None] = queue.Queue()
+        self._queue: queue.Queue[str | None] = queue.Queue(maxsize=MAX_QUEUED)
         self._final: str | None = None
         self._thread: threading.Thread | None = None
 
@@ -29,16 +30,22 @@ class Notifier:
         self._thread.start()
 
     def send(self, text: str) -> None:
-        self._queue.put(text)
+        try:
+            self._queue.put_nowait(text)
+        except queue.Full:
+            logger.info("cohost: alert dropped, notifier backlog full")
 
     def stop(self, final_status: str) -> None:
         self._final = final_status
-        self._queue.put(None)
+        try:
+            self._queue.put(None, timeout=5)  # the loop drains the queue; never hang /cohost stop
+        except queue.Full:
+            logger.warning("cohost: notifier did not drain; final status not posted")
         if self._thread:
             self._thread.join(timeout=10)
 
     def _loop(self) -> None:
-        last = self._status()
+        last = self._safe_status("")
         card = self._call(self._post, last)
         while True:
             try:
@@ -51,10 +58,17 @@ class Notifier:
                 return
             if item:
                 self._call(self._post, item)
-            current = self._status()
+            current = self._safe_status(last)
             if card is not None and current != last:
                 self._call(card.edit, current)
                 last = current
+
+    def _safe_status(self, fallback: str) -> str:
+        try:
+            return self._status()
+        except Exception as exc:
+            logger.warning("cohost: status text failed: %s", exc)
+            return fallback
 
     @staticmethod
     def _call(fn: Callable[[str], Any], text: str) -> Any:

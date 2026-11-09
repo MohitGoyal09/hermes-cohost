@@ -89,6 +89,7 @@ def build_recap_request(events: list[dict[str, Any]], title: str, duration: floa
         "schema_name": "cohost_recap",
         "max_tokens": 800,
         "temperature": 0.4,
+        "timeout": 60.0,
         "purpose": "cohost.recap",
     }
 

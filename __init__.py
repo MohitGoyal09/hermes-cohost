@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 from typing import Any
 
 from .cohost.notify import Notifier
+from .cohost.recap import fmt_ts
 from .cohost.session import CohostSession, Settings
 
 logger = logging.getLogger(__name__)
@@ -18,6 +20,8 @@ TOKEN_ENV = "COHOST_TWITCH_TOKEN"
 OBS_PASSWORD_ENV = "COHOST_OBS_PASSWORD"
 USAGE = ("Usage: /cohost start [channel] | stop | status | mark [note] | say <text>\n"
          "Viewers ask with @<bot> or !ask. Settings: Desktop → Settings → Plugins → cohost.")
+
+CHANNEL_RE = re.compile(r"[a-z0-9_]{1,25}")  # Twitch login names
 
 _lock = threading.Lock()
 _active: dict[str, Any] = {}  # ponytail: one live session per gateway; a streamer streams one channel at a time
@@ -58,9 +62,11 @@ def _status_text(session: CohostSession) -> str:
 
 
 def _start(ctx: Any, args: str) -> str:
-    channel = args.strip() or str(ctx.get_config("channel", "") or "")
+    channel = (args.strip() or str(ctx.get_config("channel", "") or "")).lstrip("#").lower()
     if not channel:
         return "Which channel? /cohost start <twitch-channel> (or set `channel` in the plugin settings)."
+    if not CHANNEL_RE.fullmatch(channel):
+        return f"'{channel[:40]}' is not a Twitch channel name (letters, digits and _ only)."
     with _lock:
         if _active:
             return f"Already co-hosting twitch.tv/{_active['session'].settings.channel}. /cohost stop first."
@@ -74,7 +80,10 @@ def _start(ctx: Any, args: str) -> str:
         session.start()
         notifier.start()  # started here so its thread carries this command's chat binding
         _active.update(session=session, notifier=notifier)
-    hint = "" if settings.bot_token else f" Set {TOKEN_ENV} to let it reply in chat."
+    if settings.bot_token and not settings.bot_nick:
+        hint = " A bot token is set but `bot_username` is empty, so it stays read-only."
+    else:
+        hint = "" if settings.bot_token else f" Set {TOKEN_ENV} and `bot_username` to let it reply in chat."
     return (f"Co-hosting twitch.tv/{settings.channel}. Viewers ask with @{settings.bot_nick or settings.names[0]}"
             f" or !ask.{hint}")
 
@@ -84,8 +93,10 @@ def _stop() -> str:
         if not _active:
             return "No co-host session is running."
         session, notifier = _active.pop("session"), _active.pop("notifier")
-    recap = session.stop()
-    notifier.stop(_status_text(session).replace("🎙️ Co-host", "⏹️ Co-host ended"))
+    try:
+        recap = session.stop()
+    finally:  # the card thread must end even if the recap fails
+        notifier.stop(_status_text(session).replace("🎙️ Co-host", "⏹️ Co-host ended"))
     return f"{recap}\nSaved to {session.dir / 'recap.md'}"
 
 
@@ -109,7 +120,7 @@ def _command(ctx: Any, raw_args: str) -> str:
         return _status_text(session)
     if sub == "mark":
         ev = session.mark(rest)
-        return f"🔖 Marked {ev['note']} at {_status_text(session).split(' · ')[1].splitlines()[0]}"
+        return f"🔖 Marked '{ev['note']}' at {fmt_ts(ev['t'])}"
     if sub == "say":
         return "Sent." if session.say(rest) else "Not sent: no bot token, not connected, or rate limited."
     return USAGE

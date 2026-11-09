@@ -7,9 +7,12 @@ from collections import deque
 from typing import Any
 
 ASK_PREFIX = "!ask"
-# Bare domains only for common link TLDs, so file names like main.rs or index.js survive on coding streams.
-LINK_TLDS = "com|net|org|io|gg|biz|xyz|ru|ly|tv|co|me|app|link|info|live|shop|site|online|store|uk|in|to|cc"
-URL_RE = re.compile(rf"https?://\S+|www\.\S+|\b[\w-]+(?:\.[\w-]+)*\.(?:{LINK_TLDS})\b(?:/\S*)?", re.IGNORECASE)
+# Every bare domain counts as a link except common source-file extensions, so main.rs, index.js
+# or config.yaml survive on coding streams while scam.ai or evil.dev do not.
+FILE_EXTS = ("rs|js|mjs|cjs|ts|tsx|jsx|py|md|json|toml|yaml|yml|go|java|kt|c|h|cpp|hpp|cs|rb|php|sh|txt|"
+             "html|css|lua|swift|sql|lock|cfg|ini|vue|svelte|zig|ex|exs|ipynb|csv|png|jpg|gif|svg")
+URL_RE = re.compile(rf"https?://\S+|www\.\S+|\b[\w-]+(?:\.[\w-]+)*\.(?!(?:{FILE_EXTS})\b)[a-z]{{2,}}\b(?:/\S*)?",
+                    re.IGNORECASE)
 LEADING_COMMAND_RE = re.compile(r"^[\s/.!]+")  # Twitch and other bots act on a leading / . !
 
 ANSWER_SCHEMA = {
@@ -72,6 +75,7 @@ def build_answer_request(question: str, asker: str, recent_chat: list[str], fram
         "schema_name": "cohost_answer",
         "max_tokens": 200,
         "temperature": 0.6,
+        "timeout": 20.0,  # a stale answer is worse than none, and stop() must not hang on it
         "purpose": "cohost.answer",
     }
 

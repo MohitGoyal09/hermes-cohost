@@ -27,7 +27,8 @@ card updates in place while you stream.
 - **Viewers can never reach tools.** Viewer answers go through `ctx.llm` (one host-owned, tool-less model call). No viewer message starts an agent turn.
 - **Chat is untrusted data.** Prompts mark it as such; replies are cleaned (no links, no leading `/` `.` `!` commands, blocked terms dropped). Flagged messages never reach the model.
 - **Cost is bounded.** Only addressed messages call the model, with a per-viewer cooldown (30 s) and a global cap (6 answers per minute by default).
-- **The streamer's agent sees a digest.** The `cohost_status` tool returns counts, highlights and short viewer lines marked as untrusted, never flagged text.
+- **Public chat cannot steer your agent.** The `cohost_status` tool returns counts and highlights only, never viewer text, so chat cannot talk your agent into `cohost_say` or anything else.
+- **Flags are defanged and throttled.** Alerts strip links and `@` mentions and arrive at most every 15 s with a "+N more" count, so a link raid does not flood your phone.
 
 ## Install
 
@@ -63,9 +64,10 @@ ask "how's chat doing?" or "mark that" in plain words.
 ## Disclosure
 
 - **Network:** connects to `irc.chat.twitch.tv:6697` (TLS) and to OBS WebSocket on the host you configure (default `127.0.0.1:4455`).
-- **Model calls:** viewer questions (text plus one stream frame) and the recap go to your active Hermes model through `ctx.llm`.
+- **Model calls:** each answer sends the question, one stream frame and about 15 recent chat lines (with display names) to your active Hermes model through `ctx.llm`. The recap sends up to 600 sampled chat lines with usernames, plus the highlight list.
+- **Posting as the bot:** the `cohost_say` tool and `/cohost say` post to your chat as the bot account. Replies never contain links or leading `/` `.` `!`.
 - **Screen capture (off by default):** if you turn on `screen_fallback`, it captures your whole screen every few seconds when OBS is not reachable (macOS asks for Screen Recording permission), and you get a warning card when it starts.
-- **Background threads:** while a session runs, threads in the gateway process read chat, poll frames and update the status card. `/cohost stop` ends them.
+- **Background threads:** while a session runs, threads in the gateway process read chat, poll frames and update the status card. They run until `/cohost stop` or the gateway exits; there is no idle auto-stop.
 - **Stored data:** chat events (`events.jsonl`), highlight frames and `recap.md` under `<HERMES_HOME>/plugin-data/cohost/sessions/`. Credentials are read only through Hermes's secret scope.
 - **No telemetry.**
 

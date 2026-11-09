@@ -49,3 +49,22 @@ def test_post_errors_do_not_kill_the_loop():
     time.sleep(0.1)
     n.stop("done")
     assert "a" in calls
+
+
+def test_status_errors_and_backlog_do_not_kill_the_loop():
+    posts = []
+
+    def post(text):
+        posts.append(text)
+        return Handle([], text)
+
+    def status():
+        raise ValueError("boom")
+
+    n = Notifier(post, status=status, interval=0.02)
+    for i in range(200):
+        n.send(f"alert {i}")  # far beyond the queue bound, before the loop even starts
+    n.start()
+    time.sleep(0.2)
+    n.stop("final")
+    assert "alert 0" in posts and len(posts) <= 52
