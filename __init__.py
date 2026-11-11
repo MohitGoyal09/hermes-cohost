@@ -11,7 +11,7 @@ from typing import Any
 
 from .cohost.notify import Notifier
 from .cohost.recap import fmt_ts
-from .cohost.session import CohostSession, Settings
+from .cohost.session import CohostSession, Settings, find_live_session
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +23,7 @@ USAGE = ("Usage: /cohost start [channel] | stop | status | mark [note] | say <te
 
 CHANNEL_RE = re.compile(r"[a-z0-9_]{1,25}")  # Twitch login names
 
-_lock = threading.Lock()
-_active: dict[str, Any] = {}  # ponytail: one live session per gateway; a streamer streams one channel at a time
+_lock = threading.Lock()  # ponytail: one live session per gateway; a streamer streams one channel at a time
 
 
 def _secret(name: str) -> str | None:
@@ -68,8 +67,9 @@ def _start(ctx: Any, args: str) -> str:
     if not CHANNEL_RE.fullmatch(channel):
         return f"'{channel[:40]}' is not a Twitch channel name (letters, digits and _ only)."
     with _lock:
-        if _active:
-            return f"Already co-hosting twitch.tv/{_active['session'].settings.channel}. /cohost stop first."
+        live = find_live_session()
+        if live is not None:
+            return f"Already co-hosting twitch.tv/{live.settings.channel}. /cohost stop first."
         from plugins.plugin_storage import plugin_data_dir
 
         settings = _settings(ctx, channel)
@@ -77,9 +77,9 @@ def _start(ctx: Any, args: str) -> str:
         session = CohostSession(settings, llm=ctx.llm, notify=lambda text: notifier and notifier.send(text),
                                 data_dir=plugin_data_dir(PLUGIN) / "sessions")
         notifier = Notifier(ctx.post_message, status=lambda: _status_text(session))
+        session.notifier = notifier  # type: ignore[attr-defined]  # reachable after a module re-import
         session.start()
         notifier.start()  # started here so its thread carries this command's chat binding
-        _active.update(session=session, notifier=notifier)
     if settings.bot_token and not settings.bot_nick:
         hint = " A bot token is set but `bot_username` is empty, so it stays read-only."
     else:
@@ -90,9 +90,11 @@ def _start(ctx: Any, args: str) -> str:
 
 def _stop() -> str:
     with _lock:
-        if not _active:
+        session = find_live_session()
+        if session is None:
             return "No co-host session is running."
-        session, notifier = _active.pop("session"), _active.pop("notifier")
+        notifier = session.notifier
+        session.running = False  # claim it, so a second /cohost stop cannot run the recap twice
     try:
         recap = session.stop()
     finally:  # the card thread must end even if the recap fails
@@ -101,7 +103,7 @@ def _stop() -> str:
 
 
 def _session() -> CohostSession | None:
-    return _active.get("session")
+    return find_live_session()
 
 
 def _command(ctx: Any, raw_args: str) -> str:

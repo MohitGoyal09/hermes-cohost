@@ -90,6 +90,7 @@ class CohostSession:
         self.running = True
         self.chat.start()
         self._frames = threading.Thread(target=self._frame_loop, name="cohost-frames", daemon=True)
+        self._frames.cohost_session = self  # type: ignore[attr-defined]  # see find_live_session
         self._frames.start()
 
     def stop(self) -> str:
@@ -306,6 +307,16 @@ class CohostSession:
             self._notify(text)
         except Exception as exc:
             logger.warning("cohost: notify failed: %s", exc)
+
+
+def find_live_session() -> Any:
+    """The running session, if any. Hermes evicts and re-imports plugin modules whenever a session
+    loads plugins, so a module global would forget the live session; threads are process-wide."""
+    for thread in threading.enumerate():
+        session = getattr(thread, "cohost_session", None)
+        if session is not None and thread.is_alive() and session.running:
+            return session
+    return None
 
 
 def _call(fn: Callable[..., Any], *args: Any) -> Any:

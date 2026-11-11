@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from cohost.session import CohostSession, Settings
+from cohost.session import CohostSession, Settings, find_live_session
 from cohost.twitch import ChatMessage
 
 
@@ -310,3 +310,14 @@ def test_say_without_token_reports_false(tmp_path):
     s.start()
     assert s.say("hi") is False
     s.stop()
+
+
+def test_live_session_is_found_across_module_reloads(tmp_path):
+    """Hermes re-imports plugin modules per session; the running session must stay reachable."""
+    assert find_live_session() is None
+    s = CohostSession(Settings(channel="c"), llm=FakeLlm(), notify=lambda t: None, data_dir=tmp_path,
+                      chat_factory=FakeChat, obs_factory=FakeObs, screen=lambda: None)
+    s.start()
+    assert find_live_session() is s
+    s.stop()
+    assert find_live_session() is None
