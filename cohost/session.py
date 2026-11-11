@@ -48,7 +48,7 @@ class Settings:
 
 def _defang(text: str) -> str:
     """Viewer text shown to the streamer: no live links, no mass mentions, no code fences."""
-    return clean_reply(text, max_len=120).replace("@", "@​").replace("`", "'")
+    return clean_reply(text, max_len=120).replace("@", "@ ").replace("`", "'")
 
 
 class CohostSession:

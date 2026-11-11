@@ -80,6 +80,12 @@ viewer, so the hard ceiling is 360 answers per hour. A typical stream with a few
 uses a small fraction of that. Lower `answers_per_minute` to cap spend further. To estimate cost,
 multiply those token counts by your model's price.
 
+**Use a cheaper model for the co-host.** Set **Co-host model provider** and **Co-host model** (for
+example `gemini` / `gemini-3.6-flash`) and grant the plugin's `llm.provider_override` and
+`llm.model_override` capabilities (`hermes plugins capabilities cohost`). Answers and the recap
+then use that vision model while your main Hermes chat keeps its own model. Without the grant, the
+co-host uses your active model.
+
 ## Disclosure
 
 - **Network:** connects to `irc.chat.twitch.tv:6697` (TLS) and to OBS WebSocket on the host you configure (default `127.0.0.1:4455`).

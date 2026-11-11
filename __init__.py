@@ -9,6 +9,7 @@ import re
 import threading
 from typing import Any
 
+from .cohost.llm import PinnedLlm
 from .cohost.notify import Notifier
 from .cohost.recap import fmt_ts
 from .cohost.session import CohostSession, Settings, find_live_session
@@ -51,6 +52,19 @@ def _settings(ctx: Any, channel: str) -> Settings:
     )
 
 
+def _llm(ctx: Any) -> tuple[Any, str]:
+    """ctx.llm, pinned to the streamer's chosen model when they granted the capabilities for it."""
+    provider = str(ctx.get_config("llm_provider", "") or "").strip()
+    model = str(ctx.get_config("llm_model", "") or "").strip()
+    missing = [cap for cap, value in (("llm.provider_override", provider), ("llm.model_override", model))
+               if value and not ctx.has_capability(cap)]
+    if missing:
+        return ctx.llm, (f" Using your active model: grant {', '.join(missing)} "
+                         "(hermes plugins capabilities cohost) to use the configured co-host model.")
+    llm = PinnedLlm(ctx.llm, provider, model)
+    return llm, (f" Answers use {provider or 'your provider'}/{model or 'default model'}." if llm.pinned else "")
+
+
 def _status_text(session: CohostSession) -> str:
     s = session.status()
     mode = "replying" if s["can_reply"] else "read-only (no bot token)"
@@ -73,8 +87,9 @@ def _start(ctx: Any, args: str) -> str:
         from plugins.plugin_storage import plugin_data_dir
 
         settings = _settings(ctx, channel)
+        llm, llm_note = _llm(ctx)
         notifier: Notifier | None = None
-        session = CohostSession(settings, llm=ctx.llm, notify=lambda text: notifier and notifier.send(text),
+        session = CohostSession(settings, llm=llm, notify=lambda text: notifier and notifier.send(text),
                                 data_dir=plugin_data_dir(PLUGIN) / "sessions")
         notifier = Notifier(ctx.post_message, status=lambda: _status_text(session))
         session.notifier = notifier  # type: ignore[attr-defined]  # reachable after a module re-import
@@ -85,7 +100,7 @@ def _start(ctx: Any, args: str) -> str:
     else:
         hint = "" if settings.bot_token else f" Set {TOKEN_ENV} and `bot_username` to let it reply in chat."
     return (f"Co-hosting twitch.tv/{settings.channel}. Viewers ask with @{settings.bot_nick or settings.names[0]}"
-            f" or !ask.{hint}")
+            f" or !ask.{hint}{llm_note}")
 
 
 def _stop() -> str:
