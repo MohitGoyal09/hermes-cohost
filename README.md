@@ -61,6 +61,25 @@ Other settings: channel, names viewers can use, persona, stream title, blocked t
 Your Hermes agent also gets three tools: `cohost_status`, `cohost_mark`, `cohost_say`. So you can
 ask "how's chat doing?" or "mark that" in plain words.
 
+## Cost
+
+The plugin is free. Twitch chat and OBS WebSocket are free and need no paid API. The only cost is
+model usage, billed to whatever model you already use in Hermes (through `ctx.llm`, with your own
+credentials). There is no separate account or key.
+
+| What calls the model | When | Rough size per call |
+|---|---|---|
+| Viewer answer | Only when a viewer addresses the co-host (`@hermes`, `!ask`) | One stream frame (about 1,000–1,600 input tokens, depending on the model), about 15 chat lines and the prompt (about 600 tokens), and a reply of up to 200 tokens |
+| Recap | Once, at `/cohost stop` | Up to 600 sampled chat lines plus highlights (about 10,000–20,000 input tokens), and a summary of up to 800 tokens |
+
+Nothing else calls the model. Normal chat, moderation flags, highlight detection and the status
+card all run locally with no model call.
+
+**Worst case:** answers are capped at `answers_per_minute` (default 6) with a 30 s cooldown per
+viewer, so the hard ceiling is 360 answers per hour. A typical stream with a few questions a minute
+uses a small fraction of that. Lower `answers_per_minute` to cap spend further. To estimate cost,
+multiply those token counts by your model's price.
+
 ## Disclosure
 
 - **Network:** connects to `irc.chat.twitch.tv:6697` (TLS) and to OBS WebSocket on the host you configure (default `127.0.0.1:4455`).
